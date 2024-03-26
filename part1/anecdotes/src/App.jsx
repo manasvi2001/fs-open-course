@@ -43,6 +43,7 @@ const App = () => {
             <br />
             <h2>Anecdote with most votes</h2>
             <div>{anecdotes[mostVotesIndex]}</div>
+            <div>has {points[mostVotesIndex]} {points[mostVotesIndex] === 1 ? 'vote' : 'votes'}</div>
         </div>
     )
 }
