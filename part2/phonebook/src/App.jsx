@@ -1,4 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import personsService from './services/persons'
+
+const Notification = ({ successMessage, errorMessage }) => {
+  return <>
+    {successMessage ?
+      <div className='success'>
+        {successMessage}
+      </div>
+      : null
+    }
+    {errorMessage ?
+      <div className='error'>
+        {errorMessage}
+      </div>
+      : null
+    }
+  </>
+}
 
 const Filter = ({ filter, setFilter, handleInput }) => {
   return <div>
@@ -20,26 +38,31 @@ const PersonForm = ({ addPerson, newName, setNewName, newNumber, setNewNumber, h
   </form>
 }
 
-const Persons = ({ persons }) => {
+const Persons = ({ persons, deletePerson }) => {
   return <>
     {persons.map(person =>
       <div key={person.id}>
-        {person.name} {person.number}
+        {person.name} {person.number} <button onClick={() => deletePerson(person.id, person.name)}>delete</button>
       </div>
     )}
   </>
 }
 
 const App = () => {
-  const [persons, setPersons] = useState([
-    { name: 'Arto Hellas', number: '040-123456', id: 1 },
-    { name: 'Ada Lovelace', number: '39-44-5323523', id: 2 },
-    { name: 'Dan Abramov', number: '12-43-234345', id: 3 },
-    { name: 'Mary Poppendieck', number: '39-23-6423122', id: 4 }
-  ])
+  const [persons, setPersons] = useState([])
   const [newName, setNewName] = useState('')
   const [newNumber, setNewNumber] = useState('')
   const [filter, setFilter] = useState('')
+  const [successMessage, setSuccessMessage] = useState(null)
+  const [errorMessage, setErrorMessage] = useState(null)
+
+  useEffect(() => {
+    personsService
+      .getAll()
+      .then(persons => {
+        setPersons(persons)
+      })
+  }, [])
 
   const handleInput = (event, setter) => {
     setter(event.target.value)
@@ -52,14 +75,66 @@ const App = () => {
       return
     }
 
-    if (persons.findIndex(person => person.name === newName || person.number === newNumber) !== -1) {
-      alert(`${newName} ${newNumber} is already added to phonebook`)
+    const personIsPresent = persons.find(person => person.name === newName)
+    if (personIsPresent) {
+      const result = confirm(`${newName} is already added to phonebook, replace the old number with the new one?`)
+      if (result) {
+        updatePerson(personIsPresent.id)
+      }
       return
     }
 
-    setPersons(prev => [...prev, { name: newName, number: newNumber, id: prev[prev.length - 1].id + 1 }])
-    setNewName('')
-    setNewNumber('')
+    personsService
+      .create({
+        name: newName,
+        number: newNumber,
+        id: `${Number(persons[persons.length - 1].id) + 1}`
+      })
+      .then(person => {
+        setPersons(prev => [...prev, person])
+        setNewName('')
+        setNewNumber('')
+        setSuccessMessage(
+          `Added ${person.name}`
+        )
+        setTimeout(() => {
+          setSuccessMessage(null)
+        }, 5000)
+      })
+  }
+
+  const updatePerson = (id) => {
+    personsService
+      .update({
+        name: newName,
+        number: newNumber,
+        id: id
+      })
+      .then(updatedPerson => {
+        setPersons(persons.map(person => person.id === id ? updatedPerson : person))
+        setNewName('')
+        setNewNumber('')
+      })
+      .catch(_ => {
+        console.log('reached here')
+        setErrorMessage(
+          `Information of ${newName} has already been removed from server`
+        )
+        setTimeout(() => {
+          setErrorMessage(null)
+        }, 5000)
+      })
+  }
+
+  const deletePerson = (id, name) => {
+    const result = confirm(`Delete ${name}?`)
+    if (result) {
+      personsService
+        .remove(id)
+        .then(_ => {
+          setPersons(persons.filter(person => person.id !== id))
+        })
+    }
   }
 
   const filteredPersons = persons.filter(person => person.name.toLowerCase().includes(filter.toLowerCase()) || person.number.includes(filter))
@@ -67,11 +142,12 @@ const App = () => {
   return (
     <div>
       <h2>Phonebook</h2>
+      <Notification successMessage={successMessage} errorMessage={errorMessage} />
       <Filter filter={filter} setFilter={setFilter} handleInput={handleInput} />
       <h2>add a new</h2>
       <PersonForm addPerson={addPerson} newName={newName} setNewName={setNewName} newNumber={newNumber} setNewNumber={setNewNumber} handleInput={handleInput} />
       <h2>Numbers</h2>
-      <Persons persons={filteredPersons} />
+      <Persons persons={filteredPersons} deletePerson={deletePerson} />
     </div>
   )
 }
